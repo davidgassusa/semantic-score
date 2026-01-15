@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Semantic Score - Analyze Your Business Language</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Client-side document processing libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">S</span>
+                <span class="logo-text">Semantic Score</span>
+            </div>
+            <p class="tagline">Discover where unclear language is costing you money</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Step Indicator -->
+            <div class="steps-indicator">
+                <div class="step active" data-step="1">
+                    <span class="step-number">1</span>
+                    <span class="step-label">Add Inputs</span>
+                </div>
+                <div class="step-line"></div>
+                <div class="step" data-step="2">
+                    <span class="step-number">2</span>
+                    <span class="step-label">Analyze</span>
+                </div>
+                <div class="step-line"></div>
+                <div class="step" data-step="3">
+                    <span class="step-number">3</span>
+                    <span class="step-label">Results</span>
+                </div>
+            </div>
+
+            <!-- Input Collection Section -->
+            <section id="input-section" class="section active">
+                <h2>Add Your Business Content</h2>
+                <p class="section-description">
+                    Upload documents, enter your website URL, or paste text directly.
+                    The more content you provide, the more accurate your Semantic Score.
+                </p>
+
+                <!-- Input Cards -->
+                <div class="input-cards">
+                    <!-- Website Input -->
+                    <div class="input-card">
+                        <div class="card-header">
+                            <span class="card-icon">🌐</span>
+                            <h3>Website</h3>
+                        </div>
+                        <p>We'll scan your website for marketing language, service descriptions, and promises.</p>
+                        <div class="input-group">
+                            <input type="url" id="website-url" placeholder="https://yourcompany.com" />
+                            <button class="btn btn-secondary" id="add-website-btn">
+                                <span class="btn-text">Scan</span>
+                                <span class="btn-loading hidden">...</span>
+                            </button>
+                        </div>
+                        <div id="website-status" class="status-message"></div>
+                    </div>
+
+                    <!-- Documents Input -->
+                    <div class="input-card">
+                        <div class="card-header">
+                            <span class="card-icon">📄</span>
+                            <h3>Documents</h3>
+                        </div>
+                        <p>Upload contracts, proposals, sales scripts, onboarding materials, and process docs.</p>
+                        <div class="file-upload" id="doc-dropzone">
+                            <input type="file" id="doc-files" multiple accept=".pdf,.docx,.doc,.txt,.md" />
+                            <div class="dropzone-content">
+                                <span class="upload-icon">📁</span>
+                                <p>Drag & drop files or <span class="link">browse</span></p>
+                                <small>PDF, DOCX, TXT (processed in your browser)</small>
+                            </div>
+                        </div>
+                        <div id="doc-list" class="file-list"></div>
+                    </div>
+
+                    <!-- Text Input -->
+                    <div class="input-card">
+                        <div class="card-header">
+                            <span class="card-icon">📝</span>
+                            <h3>Paste Text</h3>
+                        </div>
+                        <p>Paste content directly from emails, meeting notes, or other sources.</p>
+                        <textarea id="text-input" placeholder="Paste your content here..."></textarea>
+                        <button class="btn btn-secondary" id="add-text-btn">Add Text</button>
+                        <div id="text-status" class="status-message"></div>
+                    </div>
+                </div>
+
+                <!-- Collected Inputs Summary -->
+                <div class="inputs-summary" id="inputs-summary">
+                    <h4>Collected Inputs</h4>
+                    <div class="summary-stats">
+                        <div class="stat">
+                            <span class="stat-value" id="source-count">0</span>
+                            <span class="stat-label">Sources</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value" id="word-count">0</span>
+                            <span class="stat-label">Words</span>
+                        </div>
+                    </div>
+                    <div id="sources-list" class="sources-list"></div>
+                </div>
+
+                <!-- Company Size -->
+                <div class="company-size-input">
+                    <label for="company-size">Company Size (employees)</label>
+                    <input type="number" id="company-size" value="50" min="1" max="10000" />
+                    <small>Used to estimate meaning debt cost</small>
+                </div>
+
+                <!-- Analyze Button -->
+                <div class="action-buttons">
+                    <button class="btn btn-primary btn-large" id="analyze-btn" disabled>
+                        <span class="btn-text">Calculate Semantic Score</span>
+                        <span class="btn-loading hidden">Analyzing...</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Loading Section -->
+            <section id="loading-section" class="section">
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <h2>Analyzing Your Content</h2>
+                    <p id="loading-message">Extracting terms and checking for semantic collisions...</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section id="results-section" class="section">
+                <!-- Score Display -->
+                <div class="score-display" id="score-display">
+                    <div class="score-circle">
+                        <svg viewBox="0 0 100 100">
+                            <circle class="score-bg" cx="50" cy="50" r="45"/>
+                            <circle class="score-fill" cx="50" cy="50" r="45" id="score-circle"/>
+                        </svg>
+                        <div class="score-value">
+                            <span class="score-number" id="score-number">--</span>
+                            <span class="score-label" id="score-band">Loading</span>
+                        </div>
+                    </div>
+                    <div class="score-interpretation" id="score-interpretation"></div>
+                </div>
+
+                <!-- Component Breakdown -->
+                <div class="results-card">
+                    <h3>Score Components</h3>
+                    <div class="components-list" id="components-list"></div>
+                </div>
+
+                <!-- High Risk Terms -->
+                <div class="results-card">
+                    <h3>Highest Risk Terms</h3>
+                    <p class="card-description">These terms need immediate attention</p>
+                    <div class="risk-terms-list" id="risk-terms-list"></div>
+                </div>
+
+                <!-- ASPIRE Analysis -->
+                <div class="results-card">
+                    <h3>ASPIRE Stage Analysis</h3>
+                    <div class="aspire-chart" id="aspire-chart"></div>
+                </div>
+
+                <!-- Meaning Debt -->
+                <div class="results-card meaning-debt-card">
+                    <h3>Estimated Meaning Debt</h3>
+                    <div class="debt-estimate" id="debt-estimate"></div>
+                </div>
+
+                <!-- Action Plan -->
+                <div class="results-card">
+                    <h3>Your Action Plan</h3>
+                    <div class="action-plan" id="action-plan"></div>
+                </div>
+
+                <!-- Export & Actions -->
+                <div class="results-actions">
+                    <button class="btn btn-secondary" id="export-btn">Export Report</button>
+                    <button class="btn btn-primary" id="start-over-btn">New Analysis</button>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Based on <em>Semantic Collision</em> by David Gass</p>
+            <p class="footer-tagline">"If execution feels harder than it should, you probably don't have a people problem—you have a language problem."</p>
+        </footer>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
