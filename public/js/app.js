@@ -555,15 +555,156 @@ function updateStep(stepNum) {
 function exportResults() {
     if (!analysisResult) return;
 
-    const dataStr = JSON.stringify(analysisResult, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+    const result = analysisResult;
+    const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
+    const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Semantic Score Report - ${date}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1e293b; max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+        h1 { font-size: 28px; margin-bottom: 8px; color: #0f172a; }
+        h2 { font-size: 20px; margin: 32px 0 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; color: #334155; }
+        h3 { font-size: 16px; margin: 16px 0 8px; color: #475569; }
+        .header { text-align: center; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 1px solid #e2e8f0; }
+        .date { color: #64748b; font-size: 14px; }
+        .score-display { text-align: center; margin: 32px 0; }
+        .score-number { font-size: 72px; font-weight: 700; }
+        .score-band { font-size: 24px; font-weight: 600; text-transform: uppercase; margin-top: 8px; }
+        .score-excellent { color: #10b981; }
+        .score-good { color: #22c55e; }
+        .score-at_risk { color: #f59e0b; }
+        .score-poor { color: #f97316; }
+        .score-critical { color: #ef4444; }
+        .interpretation { color: #64748b; margin-top: 16px; font-style: italic; }
+        .component { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
+        .component-name { font-weight: 500; }
+        .component-score { font-weight: 600; min-width: 40px; text-align: right; }
+        .risk-term { background: #fef2f2; border-left: 4px solid #ef4444; padding: 12px 16px; margin: 12px 0; border-radius: 0 8px 8px 0; }
+        .risk-term.high { border-color: #ef4444; background: #fef2f2; }
+        .risk-term.medium { border-color: #f59e0b; background: #fffbeb; }
+        .risk-term.low { border-color: #3b82f6; background: #eff6ff; }
+        .risk-term-name { font-weight: 600; font-size: 16px; }
+        .risk-term-detail { color: #64748b; font-size: 14px; margin-top: 4px; }
+        .risk-term-recommendation { margin-top: 8px; font-size: 14px; }
+        .debt-box { background: linear-gradient(135deg, #fef3c7, #fde68a); padding: 24px; border-radius: 12px; text-align: center; margin: 24px 0; }
+        .debt-range { font-size: 28px; font-weight: 700; color: #92400e; }
+        .debt-label { color: #a16207; margin-top: 8px; }
+        .action-group { margin: 24px 0; }
+        .action-group-title { font-weight: 600; color: #475569; margin-bottom: 12px; }
+        .action-item { padding: 12px 16px; background: #f8fafc; border-radius: 8px; margin: 8px 0; }
+        .action-item strong { display: block; color: #1e293b; }
+        .action-item small { color: #64748b; font-size: 13px; }
+        .aspire-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        .aspire-table th, .aspire-table td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        .aspire-table th { background: #f8fafc; font-weight: 600; }
+        .footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid #e2e8f0; text-align: center; color: #94a3b8; font-size: 12px; }
+        @media print { body { padding: 20px; } h2 { page-break-after: avoid; } .risk-term, .action-item { page-break-inside: avoid; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Semantic Score Report</h1>
+        <div class="date">${date}</div>
+    </div>
+
+    <div class="score-display">
+        <div class="score-number score-${result.score_band}">${Math.round(result.overall_score)}</div>
+        <div class="score-band score-${result.score_band}">${result.score_band.replace('_', ' ')}</div>
+        <p class="interpretation">${getInterpretation(result.score_band)}</p>
+    </div>
+
+    <h2>Score Components</h2>
+    ${(result.components || []).map(comp => `
+        <div class="component">
+            <span class="component-name">${comp.name}</span>
+            <span class="component-score" style="color: ${comp.score >= 70 ? '#10b981' : comp.score >= 50 ? '#f59e0b' : '#ef4444'}">${Math.round(comp.score)}/100</span>
+        </div>
+    `).join('')}
+
+    <h2>High-Risk Terms</h2>
+    ${(result.high_risk_terms || []).length === 0 ? '<p>No high-risk terms identified. Great job!</p>' :
+        (result.high_risk_terms || []).slice(0, 10).map(term => `
+        <div class="risk-term ${term.risk_level}">
+            <div class="risk-term-name">"${term.term}"</div>
+            <div class="risk-term-detail">Found ${term.occurrences} times across ${term.documents.length} source(s). Risk level: ${term.risk_level}</div>
+            <div class="risk-term-recommendation"><strong>Recommendation:</strong> ${term.recommendation}</div>
+        </div>
+    `).join('')}
+
+    <h2>ASPIRE Analysis</h2>
+    <table class="aspire-table">
+        <tr><th>Stage</th><th>Score</th></tr>
+        <tr><td>Alignment</td><td>${Math.round(result.aspire_scores?.alignment || 0)}/100</td></tr>
+        <tr><td>Strategy</td><td>${Math.round(result.aspire_scores?.strategy || 0)}/100</td></tr>
+        <tr><td>Prospecting</td><td>${Math.round(result.aspire_scores?.prospecting || 0)}/100</td></tr>
+        <tr><td>Integration</td><td>${Math.round(result.aspire_scores?.integration || 0)}/100</td></tr>
+        <tr><td>Relationship</td><td>${Math.round(result.aspire_scores?.relationship || 0)}/100</td></tr>
+        <tr><td>Engagement</td><td>${Math.round(result.aspire_scores?.engagement || 0)}/100</td></tr>
+    </table>
+
+    <h2>Estimated Meaning Debt</h2>
+    <div class="debt-box">
+        <div class="debt-range">${formatCurrency(result.meaning_debt?.low_estimate || 0)} - ${formatCurrency(result.meaning_debt?.high_estimate || 0)}</div>
+        <div class="debt-label">Estimated Annual Cost</div>
+    </div>
+
+    <h2>Action Plan</h2>
+    ${renderActionPlanHTML(result.action_plan)}
+
+    <div class="footer">
+        <p>Generated by Semantic Score | ${date}</p>
+    </div>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = dataUri;
-    link.download = `semantic-score-${new Date().toISOString().split('T')[0]}.json`;
+    link.href = url;
+    link.download = `semantic-score-report-${new Date().toISOString().split('T')[0]}.html`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+function formatCurrency(num) {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
+}
+
+function renderActionPlanHTML(actions) {
+    if (!actions || actions.length === 0) return '<p>No specific actions recommended at this time.</p>';
+
+    const groups = {
+        'quick_win': { title: 'Quick Wins (Do This Week)', items: [] },
+        'high_impact': { title: 'High Impact (Do This Month)', items: [] },
+        'systemic': { title: 'Systemic (Do This Quarter)', items: [] },
+        'maintenance': { title: 'Ongoing Maintenance', items: [] }
+    };
+
+    actions.forEach(a => {
+        if (groups[a.priority]) groups[a.priority].items.push(a);
+    });
+
+    return Object.values(groups)
+        .filter(g => g.items.length > 0)
+        .map(g => `
+            <div class="action-group">
+                <div class="action-group-title">${g.title}</div>
+                ${g.items.map(item => `
+                    <div class="action-item">
+                        <strong>${item.action}</strong>
+                        <small>${item.rationale}</small>
+                    </div>
+                `).join('')}
+            </div>
+        `).join('');
 }
 
 function startOver() {

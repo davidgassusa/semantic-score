@@ -9,9 +9,7 @@
     "deploy": "netlify deploy --prod"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.20.0",
-    "cheerio": "^1.0.0-rc.12",
-    "node-fetch": "^3.3.2"
+    "@anthropic-ai/sdk": "^0.20.0"
   },
   "devDependencies": {
     "netlify-cli": "^17.0.0"

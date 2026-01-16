@@ -4,8 +4,6 @@
  * (Can't be done client-side due to CORS)
  */
 
-import * as cheerio from 'cheerio';
-
 // Important paths to try scraping
 const IMPORTANT_PATHS = [
   '/', '/about', '/about-us', '/services', '/solutions',
@@ -14,10 +12,24 @@ const IMPORTANT_PATHS = [
 ];
 
 export const handler = async (event, context) => {
+  // Handle CORS preflight
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
+      },
+      body: ''
+    };
+  }
+
   // Only allow POST
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
+      headers: { 'Access-Control-Allow-Origin': '*' },
       body: JSON.stringify({ error: 'Method not allowed' })
     };
   }
@@ -29,6 +41,7 @@ export const handler = async (event, context) => {
     if (!url) {
       return {
         statusCode: 400,
+        headers: { 'Access-Control-Allow-Origin': '*' },
         body: JSON.stringify({ error: 'URL is required' })
       };
     }
@@ -68,7 +81,8 @@ export const handler = async (event, context) => {
     if (results.length === 0) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Could not extract content from website' })
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'Could not extract content from website. The site may be blocking automated access.' })
       };
     }
 
@@ -89,6 +103,7 @@ export const handler = async (event, context) => {
     console.error('Scrape error:', error);
     return {
       statusCode: 500,
+      headers: { 'Access-Control-Allow-Origin': '*' },
       body: JSON.stringify({ error: error.message || 'Scraping failed' })
     };
   }
@@ -99,13 +114,20 @@ export const handler = async (event, context) => {
  */
 async function scrapePage(url, pageName) {
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'SemanticScoreBot/1.0 (Business Language Analysis)',
-        'Accept': 'text/html,application/xhtml+xml'
+        'User-Agent': 'Mozilla/5.0 (compatible; SemanticScoreBot/1.0; +https://semanticscore.com)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5'
       },
-      redirect: 'follow'
+      redirect: 'follow',
+      signal: controller.signal
     });
+
+    clearTimeout(timeout);
 
     if (!response.ok) return null;
 
@@ -135,37 +157,55 @@ async function scrapePage(url, pageName) {
 }
 
 /**
- * Extract meaningful text from HTML
+ * Extract meaningful text from HTML using regex (no external dependencies)
  */
 function extractText(html) {
-  const $ = cheerio.load(html);
+  // Remove script and style tags with their content
+  let text = html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
+    .replace(/<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi, ' ');
 
-  // Remove non-content elements
-  $('script, style, nav, footer, header, aside, noscript, iframe, form').remove();
-  $('[class*="nav"], [class*="menu"], [class*="sidebar"], [class*="footer"], [class*="header"], [class*="cookie"], [class*="popup"]').remove();
+  // Remove nav, header, footer sections
+  text = text
+    .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, ' ')
+    .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, ' ')
+    .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, ' ')
+    .replace(/<aside\b[^<]*(?:(?!<\/aside>)<[^<]*)*<\/aside>/gi, ' ');
 
-  // Try to find main content
-  let content = $('main').text() ||
-                $('article').text() ||
-                $('#content').text() ||
-                $('#main').text() ||
-                $('.content').text() ||
-                $('body').text();
+  // Remove all remaining HTML tags
+  text = text.replace(/<[^>]+>/g, ' ');
 
-  // Clean up the text
-  content = content
-    .replace(/\s+/g, ' ')           // Normalize whitespace
-    .replace(/\n{3,}/g, '\n\n')     // Remove excessive newlines
+  // Decode common HTML entities
+  text = text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&rsquo;/gi, "'")
+    .replace(/&lsquo;/gi, "'")
+    .replace(/&rdquo;/gi, '"')
+    .replace(/&ldquo;/gi, '"')
+    .replace(/&mdash;/gi, '—')
+    .replace(/&ndash;/gi, '–')
+    .replace(/&#\d+;/gi, ' ');
+
+  // Clean up whitespace
+  text = text
+    .replace(/\s+/g, ' ')
     .trim();
 
-  // Remove common boilerplate
-  content = content
+  // Remove common boilerplate patterns
+  text = text
     .replace(/©.*?\d{4}/g, '')
     .replace(/All [Rr]ights [Rr]eserved/g, '')
     .replace(/[Pp]rivacy [Pp]olicy/g, '')
-    .replace(/[Tt]erms of [Ss]ervice/g, '');
+    .replace(/[Tt]erms of [Ss]ervice/g, '')
+    .replace(/[Cc]ookie [Pp]olicy/g, '');
 
-  return content.trim();
+  return text.trim();
 }
 
 /**
