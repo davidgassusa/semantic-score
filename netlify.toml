@@ -3,6 +3,7 @@
 [build]
   publish = "public"
   functions = "netlify/functions"
+  command = "npm install"
 
 [functions]
   # Use Node.js 18
